@@ -1,3 +1,12 @@
+/**
+ * @file led_driver.h
+ * @brief Led driver header file for the project.
+ *        This file contains the function declarations for the led driver.
+ * @date 2024-05-25
+ *
+ *
+ */
+
 #ifndef LED_DRIVER_H
 #define LED_DRIVER_H
 

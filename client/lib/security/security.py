@@ -1,117 +1,85 @@
-# Autor: Oliver Joisten
-# Desccription: This file contains the security module which is used in the client.py file to encrypt and decrypt messages.
+# Author: Oliver Joisten
+# Description: This file contains the security module which is used in the client.py file to encrypt and decrypt messages.
 
-from mbedtls import hmac, cipher
-import os
+from mbedtls import pk, hmac, hashlib, cipher
 
-hmac_key = "Fj2-;wu3Ur=ARl2!Tqi6IuKM3nG]8z1+"
+RSA_SIZE = 256
+EXPONENT = 65537
+SECRET_KEY = b"Fj2-;wu3Ur=ARl2!Tqi6IuKM3nG]8z1+"
 
-# Generating a 256-bit AES key
-aes_key = os.urandom(32)
-print("AES KEY:", aes_key)
-print("\n")
+# HMAC setup
+HMAC_KEY = hashlib.sha256()
+HMAC_KEY.update(SECRET_KEY)
+HMAC_KEY = HMAC_KEY.digest()
+hmac_hash = hmac.new(HMAC_KEY, digestmod="SHA256")
 
-
-def generate_hmac(message, hmac_key):
-    hmac_key_bytes = hmac_key.encode()
-    h = hmac.new(hmac_key_bytes, digestmod='sha256')
-    h.update(message.encode())
-    print("HMAC:", h.hexdigest())
-    print("\n")
-    return h.hexdigest()
+# RSA setup
+rsa = pk.RSA()
+rsa.generate(RSA_SIZE * 8, EXPONENT)
 
 
-def verify_hmac(message, received_hmac, hmac_key):
-    our_hmac = generate_hmac(message, hmac_key)
-    print(our_hmac + "\n" + received_hmac + "\n")
-
-    return our_hmac == received_hmac
+def initialize_rsa():
+    rsa.generate(RSA_SIZE * 8, EXPONENT)
+    return rsa
 
 
-def pad(data, block_size):
-    padding_length = block_size - len(data) % block_size
-    padding = chr(padding_length) * padding_length
-    return data + padding.encode()
+def get_hmac_key():
+    return HMAC_KEY
 
 
-def unpad(data):
-    padding_length = data[-1]
-    if padding_length > 16:
-        raise ValueError("Invalid padding length")
-    return data[:-padding_length]
+def create_aes(buffer):
+    return cipher.AES.new(buffer[24:56], cipher.MODE_CBC, buffer[8:24])
 
 
-def encrypt_message_aes256(message, aes_key):
-    print("\n Encryption process started")
-    print("Type of aes_key:", type(aes_key))
-    print("\n")
-
-    # Check if the key and message are bytes
-    if not isinstance(aes_key, bytes):
-        raise TypeError("Key must be a bytes-like object")
-    if not isinstance(message, bytes):
-        raise TypeError("Message must be a bytes-like object for encryption")
-
-    # Generate a random IV
-    iv = os.urandom(16)
-
-    # Create a new AES cipher in CBC mode with PKCS7 padding
-    cipher_aes = cipher.AES.new(aes_key, cipher.MODE_CBC, iv)
-    print("IV:", iv)
-    print("\n")
-
-    # Encrypt the padded message
-    encrypted_message = cipher_aes.encrypt(pad(message, cipher_aes.block_size))
-    print("ENCRYPTED MESSAGE:", encrypted_message)
-    print("\n")
-
-    # Convert the encrypted message to hexadecimal
-    encrypted_message_hex = encrypted_message.hex()
-    print("HEX ENCRYPTED MESSAGE:", encrypted_message_hex)
-    print("\n")
-
-    # Convert the IV to hexadecimal
-    iv_hex = iv.hex()
-    print("HEX ENCRYPTED IV: ", iv_hex)
-    print("\n")
-
-    # Prepend IV to the encrypted message
-    final_message_hex = iv_hex + encrypted_message_hex
-    print("FINAL MESSAGE:", final_message_hex)
-    print("\n")
-    print("Encryption process finished")
-    return final_message_hex
+def export_public_key(rsa):
+    return rsa.export_public_key()
 
 
-def decrypt_message_aes256(encrypted_message_hex, aes_key):
-    print("Decryption process started")
-    if not isinstance(aes_key, bytes):
-        raise TypeError("Key must be a bytes-like object")
-    if not isinstance(encrypted_message_hex, str):
-        raise TypeError("Encrypted message must be a hexadecimal string")
+def decrypt_rsa(rsa, buffer):
+    return rsa.decrypt(buffer)
 
-    # Correctly extract the IV and the encrypted message
-    iv_hex = encrypted_message_hex[:32]
-    encrypted_message_hex = encrypted_message_hex[32:]
 
-    print("Extracted IV:", iv_hex)
-    print("\n")
+def sign_rsa(rsa, HMAC_KEY):
+    return rsa.sign(HMAC_KEY, "SHA256")
 
-    # Convert hex to bytes
-    iv = bytes.fromhex(iv_hex)
-    encrypted_message = bytes.fromhex(encrypted_message_hex)
 
-    print("Converted IV:", iv)
-    print("\n")
+def encrypt_rsa(rsa, buffer):
+    return rsa.encrypt(buffer)
 
-    # Decrypt the message
-    cipher_aes = cipher.AES.new(aes_key, cipher.MODE_CBC, iv)
-    decrypted_padded_message = cipher_aes.decrypt(encrypted_message)
 
-    # Unpad the message
-    decrypted_message = unpad(decrypted_padded_message)
-    print("DECRYPTED MESSAGE:", decrypted_message)
-    print("\n")
-    print("Decryption process finished")
-    print("\n")
-    return decrypted_message
+def send_data(self, buf: bytes):
+    if self.ser and self.ser.is_open:
+        hmac_hash.update(buf)
+        buf += hmac_hash.digest()
+        print(f"Sending data (length {len(buf)}): {buf.hex()}")
+        written = self.ser.write(buf)
+        if len(buf) != written:
+            print(
+                f"Connection Error: Only {written} bytes written out of {len(buf)}")
+            self.close_connection()
+            return False, None
+        self.ser.flush()
+        print("Data flushed.")
+        return True, buf
+    else:
+        if self.ser is None:
+            raise ConnectionError("Serial port is not open")
+
+
+def receive_data(self, size: int) -> bytes:
+    if self.ser and self.ser.is_open:
+        buffer = self.ser.read(size + hmac_hash.digest_size)
+        print(f"Received raw data (length {len(buffer)}): {buffer.hex()}")
+        hmac_hash.update(buffer[0:size])
+        buff = buffer[size:size + hmac_hash.digest_size]
+        dig = hmac_hash.digest()
+        print("b", buff.hex())
+        print("d", dig.hex())
+        if buff != dig:
+            print("Hash Error")
+            self.close_connection()
+            return bytes()
+        return buffer[0:size]
+    else:
+        if self.ser is None:
+            raise ConnectionError("Serial port is not open")

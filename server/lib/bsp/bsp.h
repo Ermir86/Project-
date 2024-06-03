@@ -1,3 +1,11 @@
+/**
+ * @file bsp.h
+ * @brief  This file contains the declaration of the Board Support Package (BSP) for the project.
+ * @date 2024-05-25
+ *
+ *
+ */
+
 #ifndef BSP_H
 #define BSP_H
 
