@@ -1,6 +1,0 @@
-# GUI Dependencies
-Tkinter # Usually pre-installed with Python
-
-# Communication Dependencies
-pyserial
-python-mbedtls
