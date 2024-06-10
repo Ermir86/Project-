@@ -8,4 +8,4 @@ client:
 server:
 	@cd server && pio run -t upload 
 
-.PHONY: clean client server 
+.PHONY: server client clean 

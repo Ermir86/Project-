@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-bool cmmnctn_int(const char *com_param);
+bool cmmnctn_init(const char *com_param);
 
 bool cmmnctn_write(const uint8_t *data, size_t dlen);
 

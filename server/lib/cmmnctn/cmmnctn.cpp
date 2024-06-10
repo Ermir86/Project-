@@ -1,7 +1,7 @@
 #include "cmmnctn.h"
 #include <Arduino.h>
 
-bool cmmnctn_int(const char *com_param)
+bool cmmnctn_init(const char *com_param)
 {
     String param{com_param};
 
